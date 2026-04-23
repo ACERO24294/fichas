@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>fichas de acceso</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --azul-acreimex: #003366;
+            --azul-oscuro: #001a33;
+            --celeste-accent: #3b82f6;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; padding: 40px; text-align: center; }
+        
+        .controles { 
+            background: white; padding: 25px; border-radius: 12px; 
+            margin-bottom: 40px; display: inline-block; box-shadow: 0 4px 6px rgb(0 0 0 / 0.1);
+        }
+
+        .ficha-container { 
+            width: 800px; height: 480px; 
+            margin: 20px auto; position: relative;
+            background: linear-gradient(135deg, var(--azul-acreimex) 0%, var(--azul-oscuro) 100%);
+            border-radius: 16px; overflow: hidden;
+            text-align: left; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3);
+        }
+
+        .header-section {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 40px; background: rgba(255,255,255,0.05);
+        }
+
+        .title-white { color: white; font-size: 28px; font-weight: 900; text-transform: uppercase; margin: 0; }
+
+        .logo-box { background: white; padding: 8px 15px; border-radius: 8px; display: flex; align-items: center; }
+
+        .banner-info {
+            background: white; margin: 15px 40px; padding: 12px 25px;
+            border-radius: 10px; border-left: 6px solid var(--celeste-accent);
+        }
+        .banner-info p { margin: 0; font-size: 14px; color: #1e293b; font-weight: 600; }
+
+        .main-content { display: flex; padding: 0 40px; gap: 25px; align-items: center; margin-top: 15px; }
+
+        .mascota-box {
+            width: 140px; height: 140px; background: white;
+            border-radius: 50%; border: 4px solid var(--celeste-accent);
+            display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+
+        .data-panel {
+            flex-grow: 1; background: white; padding: 20px 30px;
+            border-radius: 15px; display: grid; grid-template-columns: 120px 1fr; gap: 10px;
+        }
+
+        .label { color: var(--azul-acreimex); font-weight: 800; font-size: 14px; text-transform: uppercase; }
+        .value { color: #1e293b; font-size: 18px; font-weight: 700; }
+
+        .footer-links {
+            position: absolute; bottom: 25px; width: 100%;
+            display: flex; justify-content: center; gap: 50px;
+        }
+
+        .tool-link {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(255,255,255,0.1); padding: 8px 20px;
+            border-radius: 30px; text-decoration: none; color: white;
+        }
+        .tool-link img { height: 40px; width: 40px; object-fit: contain; }
+
+        .btn-descarga {
+            background: #e11d48; color: white; padding: 12px 24px;
+            border: none; border-radius: 8px; cursor: pointer;
+            font-weight: bold; margin-bottom: 10px; transition: 0.3s;
+        }
+        .btn-descarga:hover { background: #be123c; }
+    </style>
+</head>
+<body>
+
+<div class="controles">
+    <h2>Fichas Acreimex</h2>
+    <input type="file" id="inputExcel" accept=".xlsx" />
+</div>
+
+<div id="contenedor-fichas"></div>
+
+<script>
+    const URL_BURO = "https://solidarios-acr.github.io/HERRAMIENTA-/";
+    const URL_KOCO = "https://acero24294.github.io/ACREIMEX-CHAT/";
+
+    // Función mágica para convertir imágenes locales a datos seguros para el navegador
+    async function toDataURL(url) {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) {
+            return url; // Si falla, devuelve la url original
+        }
+    }
+
+    document.getElementById('inputExcel').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            
+            // Pre-cargamos las imágenes para evitar errores de seguridad
+            const imgSolidario = await toDataURL('solidario.png');
+            const imgKoco = await toDataURL('koco.png');
+            const imgBuro = await toDataURL('buro.png');
+            const imgChat = await toDataURL('chat.png');
+
+            document.getElementById('contenedor-fichas').innerHTML = '';
+            rawData.forEach(fila => crearFicha({
+                user: fila['usuario'] || 'N/A',
+                nombre: fila['nombre'] || 'Socio',
+                pass: fila['contraseña'] || 'N/A'
+            }, { imgSolidario, imgKoco, imgBuro, imgChat }));
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function crearFicha(datos, imgs) {
+        const idUnico = 'ficha-' + Math.random().toString(36).substr(2, 9);
+        const wrapper = document.createElement('div');
+        wrapper.style.marginBottom = "50px";
+
+        const btn = document.createElement('button');
+        btn.className = 'btn-descarga';
+        btn.innerHTML = `📄 Descargar Imagen de ${datos.nombre}`;
+        
+        btn.onclick = async () => {
+            const elemento = document.getElementById(idUnico);
+            try {
+                const canvas = await html2canvas(elemento, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false
+                });
+                const link = document.createElement('a');
+                link.download = `Ficha_${datos.nombre}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch (err) {
+                console.error(err);
+                alert("Error al generar la imagen. Asegúrate de que las imágenes estén en la misma carpeta que este archivo.");
+            }
+        };
+
+        wrapper.innerHTML = `
+            <div class="ficha-container" id="${idUnico}">
+                <div class="header-section">
+                    <h1 class="title-white">Ficha de Acceso Digital</h1>
+                    <div class="logo-box">
+                        <img src="${imgs.imgSolidario}" style="width:160px">
+                    </div>
+                </div>
+                <div class="banner-info">
+                    <p>Credenciales de acceso para tus herramientas digitales. Haz clic en los iconos inferiores para ir a las apps.</p>
+                </div>
+                <div class="main-content">
+                    <div class="mascota-box">
+                        <img src="${imgs.imgKoco}" style="width:90%">
+                    </div>
+                    <div class="data-panel">
+                        <span class="label">Usuario</span> <span class="value">${datos.user}</span>
+                        <span class="label">Contraseña</span> <span class="value" style="color:#e11d48; font-family:monospace">${datos.pass}</span>
+                    </div>
+                </div>
+                <div class="footer-links">
+                    <div class="tool-link">
+                        <img src="${imgs.imgBuro}">
+                        <span>HERRAMIENTA DE BURÓ</span>
+                    </div>
+                    <div class="tool-link">
+                        <img src="${imgs.imgChat}">
+                        <span>KOCO SOLIDARIO</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        wrapper.prepend(btn);
+        document.getElementById('contenedor-fichas').appendChild(wrapper);
+    }
+</script>
+</body>
+</html>
