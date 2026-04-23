@@ -5,6 +5,9 @@
     <title>fichas de acceso</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
     <style>
         :root {
             --azul-acreimex: #003366;
@@ -75,6 +78,11 @@
             font-weight: bold; margin-bottom: 10px; transition: 0.3s;
         }
         .btn-descarga:hover { background: #be123c; }
+
+        .btn-zip {
+            background: #059669; margin-left: 10px;
+        }
+        .btn-zip:hover { background: #047857; }
     </style>
 </head>
 <body>
@@ -82,15 +90,15 @@
 <div class="controles">
     <h2>Fichas Acreimex</h2>
     <input type="file" id="inputExcel" accept=".xlsx" />
+    <button id="btnZip" class="btn-descarga btn-zip" style="display:none">📦 Descargar TODAS en ZIP</button>
 </div>
 
 <div id="contenedor-fichas"></div>
 
 <script>
-    const URL_BURO = "https://solidarios-acr.github.io/HERRAMIENTA-/";
-    const URL_KOCO = "https://acero24294.github.io/ACREIMEX-CHAT/";
+    let listadoFichas = []; // Para guardar referencias y nombres para el ZIP
+    let imagenesBase64 = {};
 
-    // Función mágica para convertir imágenes locales a datos seguros para el navegador
     async function toDataURL(url) {
         try {
             const response = await fetch(url);
@@ -101,9 +109,7 @@
                 reader.onerror = reject;
                 reader.readAsDataURL(blob);
             });
-        } catch (e) {
-            return url; // Si falla, devuelve la url original
-        }
+        } catch (e) { return url; }
     }
 
     document.getElementById('inputExcel').addEventListener('change', function(e) {
@@ -114,18 +120,26 @@
             const workbook = XLSX.read(data, {type: 'array'});
             const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
             
-            // Pre-cargamos las imágenes para evitar errores de seguridad
-            const imgSolidario = await toDataURL('solidario.png');
-            const imgKoco = await toDataURL('koco.png');
-            const imgBuro = await toDataURL('buro.png');
-            const imgChat = await toDataURL('chat.png');
+            // Precarga
+            imagenesBase64.imgSolidario = await toDataURL('solidario.png');
+            imagenesBase64.imgKoco = await toDataURL('koco.png');
+            imagenesBase64.imgBuro = await toDataURL('buro.png');
+            imagenesBase64.imgChat = await toDataURL('chat.png');
 
             document.getElementById('contenedor-fichas').innerHTML = '';
-            rawData.forEach(fila => crearFicha({
-                user: fila['usuario'] || 'N/A',
-                nombre: fila['nombre'] || 'Socio',
-                pass: fila['contraseña'] || 'N/A'
-            }, { imgSolidario, imgKoco, imgBuro, imgChat }));
+            listadoFichas = [];
+            
+            rawData.forEach(fila => {
+                const fichaObj = {
+                    user: fila['usuario'] || 'N/A',
+                    nombre: fila['nombre'] || 'Socio',
+                    pass: fila['contraseña'] || 'N/A'
+                };
+                const idGenerado = crearFicha(fichaObj, imagenesBase64);
+                listadoFichas.push({ id: idGenerado, nombre: fichaObj.nombre });
+            });
+
+            if(listadoFichas.length > 0) document.getElementById('btnZip').style.display = 'inline-block';
         };
         reader.readAsArrayBuffer(file);
     });
@@ -138,25 +152,7 @@
         const btn = document.createElement('button');
         btn.className = 'btn-descarga';
         btn.innerHTML = `📄 Descargar Imagen de ${datos.nombre}`;
-        
-        btn.onclick = async () => {
-            const elemento = document.getElementById(idUnico);
-            try {
-                const canvas = await html2canvas(elemento, {
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: true,
-                    logging: false
-                });
-                const link = document.createElement('a');
-                link.download = `Ficha_${datos.nombre}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            } catch (err) {
-                console.error(err);
-                alert("Error al generar la imagen. Asegúrate de que las imágenes estén en la misma carpeta que este archivo.");
-            }
-        };
+        btn.onclick = () => descargarIndividual(idUnico, datos.nombre);
 
         wrapper.innerHTML = `
             <div class="ficha-container" id="${idUnico}">
@@ -167,7 +163,7 @@
                     </div>
                 </div>
                 <div class="banner-info">
-                    <p>Conserva esta ficha con tu usuario y contraseña para ingresar manualmente a tus plataformas digitales </p>
+                    <p>Conserva esta ficha con tu usuario y contraseña para ingresar manualmente a tus plataformas digitales.</p>
                 </div>
                 <div class="main-content">
                     <div class="mascota-box">
@@ -192,7 +188,42 @@
         `;
         wrapper.prepend(btn);
         document.getElementById('contenedor-fichas').appendChild(wrapper);
+        return idUnico;
     }
+
+    async function descargarIndividual(id, nombre) {
+        const elemento = document.getElementById(id);
+        const canvas = await html2canvas(elemento, { scale: 2, useCORS: true, allowTaint: true });
+        const link = document.createElement('a');
+        link.download = `Ficha_${nombre}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // FUNCIÓN PARA DESCARGAR TODO EN ZIP
+    document.getElementById('btnZip').onclick = async function() {
+        const zip = new JSZip();
+        const btn = this;
+        btn.innerHTML = "⌛ Procesando... (No cierres)";
+        btn.disabled = true;
+
+        for (let item of listadoFichas) {
+            const elemento = document.getElementById(item.id);
+            // Capturamos cada ficha
+            const canvas = await html2canvas(elemento, { scale: 2, useCORS: true, allowTaint: true });
+            const dataUrl = canvas.toDataURL('image/png');
+            // Extraemos solo la base64 (quitando el prefijo data:image/png;base64,)
+            const base64Data = dataUrl.replace(/^data:image\/(png|jpg);base64,/, "");
+            // Agregamos al ZIP
+            zip.file(`Ficha_${item.nombre}.png`, base64Data, {base64: true});
+        }
+
+        zip.generateAsync({type:"blob"}).then(function(content) {
+            saveAs(content, "Fichas_Acreimex.zip");
+            btn.innerHTML = "📦 Descargar TODAS en ZIP";
+            btn.disabled = false;
+        });
+    };
 </script>
 </body>
 </html>
