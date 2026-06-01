@@ -119,16 +119,7 @@
             const data = new Uint8Array(event.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-            
-            // Precarga
-            imagenesBase64.imgSolidario = await toDataURL('solidario.png');
-            imagenesBase64.imgKoco = await toDataURL('koco.png');
-            imagenesBase64.imgBuro = await toDataURL('buro.png');
-            imagenesBase64.imgChat = await toDataURL('chat.png');
-
-            document.getElementById('contenedor-fichas').innerHTML = '';
-            listadoFichas = [];
-            
+       
             rawData.forEach(fila => {
                 const fichaObj = {
                     user: fila['usuario'] || 'N/A',
@@ -174,18 +165,7 @@
                         <span class="label">Contraseña</span> <span class="value" style="color:#e11d48; font-family:monospace">${datos.pass}</span>
                     </div>
                 </div>
-                <div class="footer-links">
-                    <div class="tool-link">
-                        <img src="${imgs.imgBuro}">
-                        <span>HERRAMIENTA DE BURÓ</span>
-                    </div>
-                    <div class="tool-link">
-                        <img src="${imgs.imgChat}">
-                        <span>KOCO SOLIDARIO</span>
-                    </div>
-                </div>
-            </div>
-        `;
+                
         wrapper.prepend(btn);
         document.getElementById('contenedor-fichas').appendChild(wrapper);
         return idUnico;
